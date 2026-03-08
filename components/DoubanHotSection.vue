@@ -3,9 +3,24 @@
 
   <div v-else class="douban-movie-section">
     <div class="section-head">
-      <h2 class="section-title">豆瓣电影 · 新片榜</h2>
-      <p class="section-subtitle">点击电影可快速发起网盘搜索</p>
+      <h2 class="section-title">
+        豆瓣{{ currentCategory?.label }} · {{ currentCategory?.type || "榜单" }}
+      </h2>
+      <p class="section-subtitle">点击可快速发起网盘搜索</p>
     </div>
+
+    <!-- 分类 Tabs -->
+    <div class="category-tabs">
+      <button
+        v-for="cat in availableCategories"
+        :key="cat.id"
+        :class="['tab-btn', { active: selectedCategoryId === cat.id }]"
+        @click="selectCategory(cat.id)"
+      >
+        {{ cat.type || "榜单" }}
+      </button>
+    </div>
+
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
       <span>加载中…</span>
@@ -68,6 +83,34 @@ const loading = ref(false);
 const categories = ref<Record<string, DoubanHotCategory>>({});
 const hasInitialized = ref(false);
 const imgFailed = ref<number[]>([]);
+const selectedCategoryId = ref<string>("douban-movie");
+
+// 所有可用的分类配置
+const availableCategories = computed(() => {
+  return [
+    { id: "douban-movie", label: "电影", type: "新片榜" },
+    { id: "douban-top250", label: "电影", type: "Top250" },
+    { id: "douban-weekly", label: "电影", type: "口碑榜" },
+    { id: "douban-us-box", label: "电影", type: "北美票房" },
+  ];
+});
+
+// 当前选中的分类
+const currentCategory = computed(() => {
+  return categories.value[selectedCategoryId.value];
+});
+
+// 当前分类的项目
+const movieItems = computed(() => {
+  return currentCategory.value?.items ?? [];
+});
+
+// 是否有任何数据
+const hasAnyData = computed(() => {
+  if (loading.value) return true;
+  // 只要有一个分类有数据就显示
+  return Object.values(categories.value).some(cat => cat.items.length > 0);
+});
 
 function onImgError(id: number) {
   if (!imgFailed.value.includes(id)) {
@@ -75,18 +118,8 @@ function onImgError(id: number) {
   }
 }
 
-const movieItems = computed(() => {
-  const cat = categories.value["douban-movie"];
-  return cat?.items ?? [];
-});
-
-const hasAnyData = computed(() => {
-  if (loading.value) return true;
-  return movieItems.value.length > 0;
-});
-
 function extractTerm(title: string): string {
-  return title.replace(/^【[\d.]+】/, "").trim() || title;
+  return title.replace(/^【[\d.]+】/, "").replace(/^#\d+\s*/, "").trim() || title;
 }
 
 function proxyCover(url: string): string {
@@ -97,7 +130,9 @@ function proxyCover(url: string): string {
 async function fetchDoubanHot() {
   loading.value = true;
   try {
-    const response = await fetch("/api/douban-hot");
+    // 获取所有分类的数据
+    const allCategories = availableCategories.value.map(c => c.id).join(",");
+    const response = await fetch(`/api/douban-hot?categories=${allCategories}`);
     const data = await response.json();
     if (data.code === 0 && data.data?.categories) {
       categories.value = data.data.categories;
@@ -109,6 +144,10 @@ async function fetchDoubanHot() {
   } finally {
     loading.value = false;
   }
+}
+
+function selectCategory(categoryId: string) {
+  selectedCategoryId.value = categoryId;
 }
 
 function onItemClick(title: string) {
@@ -153,6 +192,41 @@ defineExpose({ init, refresh });
   margin: 0;
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.tab-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 180ms ease;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text-primary);
+  border-color: var(--primary);
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  background: rgba(15, 118, 110, 0.08);
+  border-color: var(--primary);
+  font-weight: 600;
 }
 
 .loading-state {
