@@ -618,10 +618,6 @@ const scrapers: Record<string, () => Promise<DoubanHotItem[]>> = {
   "douban-top250": scrapeDoubanTop250,
   "douban-weekly": scrapeDoubanWeekly,
   "douban-us-box": scrapeDoubanUsBox,
-  "douban-tv-hot": scrapeDoubanTvHot,
-  "douban-tv-weekly": scrapeDoubanTvWeekly,
-  "douban-variety-hot": scrapeDoubanVarietyHot,
-  "douban-variety-weekly": scrapeDoubanVarietyWeekly,
 };
 
 export async function fetchDoubanHot(
