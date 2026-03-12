@@ -12,7 +12,6 @@ export function useAuth() {
       const data = await $fetch<{ locked: boolean }>(`${API_BASE}/auth/status`);
       locked.value = !!data.locked;
     } catch (e: any) {
-      locked.value = true;
       error.value = e?.data?.message || e?.message || "获取状态失败";
     } finally {
       loading.value = false;
