@@ -54,6 +54,40 @@ class FallbackPlugin extends BaseAsyncPlugin {
   }
 }
 
+class VariantMergePlugin extends BaseAsyncPlugin {
+  async search(keyword: string): Promise<SearchResult[]> {
+    if (keyword === "肖申克的救赎") {
+      return [
+        {
+          message_id: "variant-1",
+          unique_id: "variant-1",
+          channel: "variant-plugin",
+          datetime: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+          title: "肖申克的救赎",
+          content: "exact",
+          links: [{ type: "quark", url: "https://example.com/exact", password: "" }],
+        },
+      ];
+    }
+
+    if (keyword === "肖申克 救赎") {
+      return [
+        {
+          message_id: "variant-2",
+          unique_id: "variant-2",
+          channel: "variant-plugin",
+          datetime: new Date("2026-01-02T00:00:00.000Z").toISOString(),
+          title: "肖申克 救赎 导演剪辑版",
+          content: "variant",
+          links: [{ type: "quark", url: "https://example.com/variant", password: "" }],
+        },
+      ];
+    }
+
+    return [];
+  }
+}
+
 function createService(plugin: BaseAsyncPlugin) {
   const manager = new PluginManager();
   manager.registerPlugin(plugin);
@@ -190,5 +224,24 @@ describe("SearchService warnings", () => {
     expect(status?.isHealthy).toBe(true);
     expect(status?.failureCount).toBe(0);
     expect(status?.successCount).toBe(1);
+  });
+
+  it("merges variant query results when exact plugin results are sparse", async () => {
+    const service = createService(new VariantMergePlugin("variant", 1));
+
+    const result = await service.searchWithWarnings(
+      "肖申克的救赎",
+      [],
+      1,
+      false,
+      "merged_by_type",
+      "plugin",
+      ["variant"],
+      undefined,
+      {}
+    );
+
+    expect(result.response.total).toBe(2);
+    expect(result.warnings).toEqual([]);
   });
 });

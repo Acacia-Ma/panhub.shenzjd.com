@@ -12,6 +12,7 @@ import {
   classifyError,
   type WarningInfo,
 } from "../utils/errors";
+import { buildSearchKeywordVariants } from "../utils/searchKeyword";
 
 export interface SearchServiceOptions {
   priorityChannels: string[];
@@ -23,6 +24,11 @@ export interface SearchServiceOptions {
 }
 
 export class SearchService {
+  private static readonly TG_CHANNEL_LIMIT = 80;
+  private static readonly TG_DEEP_CHANNEL_LIMIT = 160;
+  private static readonly TG_DEEP_SEARCH_TRIGGER = 3;
+  private static readonly PLUGIN_VARIANT_TRIGGER = 5;
+
   private options: SearchServiceOptions;
   private pluginManager: PluginManager;
   private cache: UnifiedCache;
@@ -127,19 +133,21 @@ export class SearchService {
       });
     }
 
-    await Promise.all(tasks.map((t) => t()));
+    await Promise.all(tasks.map((task) => task()));
 
     const allResults = this.mergeSearchResults(tgResults, pluginResults);
     this.sortResultsByTimeDesc(allResults);
 
     const filteredForResults: SearchResult[] = [];
-    for (const r of allResults) {
-      const hasTime = !!r.datetime;
-      const hasLinks = Array.isArray(r.links) && r.links.length > 0;
-      const keywordPriority = this.getKeywordPriority(r.title);
-      const pluginLevel = this.getPluginLevelBySource(this.getResultSource(r));
+    for (const result of allResults) {
+      const hasTime = !!result.datetime;
+      const hasLinks = Array.isArray(result.links) && result.links.length > 0;
+      const keywordPriority = this.getKeywordPriority(result.title);
+      const pluginLevel = this.getPluginLevelBySource(
+        this.getResultSource(result)
+      );
       if (hasTime || hasLinks || keywordPriority > 0 || pluginLevel <= 2) {
-        filteredForResults.push(r);
+        filteredForResults.push(result);
       }
     }
 
@@ -153,7 +161,7 @@ export class SearchService {
     let response: SearchResponse = { total: 0 };
     if (effResultType === "merged_by_type") {
       total = Object.values(mergedLinks).reduce(
-        (sum, arr) => sum + arr.length,
+        (sum, items) => sum + items.length,
         0
       );
       response = { total, merged_by_type: mergedLinks };
@@ -194,7 +202,6 @@ export class SearchService {
     }
 
     const { fetchTgChannelPosts } = await import("./tg");
-    const perChannelLimit = 30;
     const requestedTimeout = Number((ext as any)?.__plugin_timeout_ms) || 0;
     const timeoutMs = Math.max(
       3000,
@@ -208,32 +215,55 @@ export class SearchService {
     );
 
     const prioritySet = new Set(priorityChannels || []);
-    const priorityList = chList.filter((ch) => prioritySet.has(ch));
-    const normalList = chList.filter((ch) => !prioritySet.has(ch));
+    const priorityList = chList.filter((channel) => prioritySet.has(channel));
+    const normalList = chList.filter((channel) => !prioritySet.has(channel));
 
-    const createChannelTask = (channel: string) => async () => {
-      const result = await safeExecute(
-        () =>
-          this.withTimeout<SearchResult[]>(
-            fetchTgChannelPosts(channel, keyword, {
-              limitPerChannel: perChannelLimit,
-            }),
-            timeoutMs,
-            []
-          ),
-        []
-      );
-      return result;
+    const createChannelTask =
+      (channel: string, limitPerChannel: number) => async () => {
+        const result = await safeExecute(
+          () =>
+            this.withTimeout<SearchResult[]>(
+              fetchTgChannelPosts(channel, keyword, {
+                limitPerChannel,
+              }),
+              timeoutMs,
+              []
+            ),
+          []
+        );
+        return result;
+      };
+
+    const flattenResults = (items: SearchResult[][]) => {
+      const flattened: SearchResult[] = [];
+      for (const arr of items) {
+        if (Array.isArray(arr)) {
+          flattened.push(...arr);
+        }
+      }
+      return flattened;
     };
 
-    const allTasks = [...priorityList, ...normalList].map(createChannelTask);
-    const allResults = await this.runWithConcurrency(allTasks, concurrency);
+    const shallowTasks = [...priorityList, ...normalList].map((channel) =>
+      createChannelTask(channel, SearchService.TG_CHANNEL_LIMIT)
+    );
+    const shallowResults = flattenResults(
+      await this.runWithConcurrency(shallowTasks, concurrency)
+    );
 
-    const results: SearchResult[] = [];
-    for (const arr of allResults) {
-      if (Array.isArray(arr)) {
-        results.push(...arr);
-      }
+    let results = shallowResults;
+    if (
+      results.length < SearchService.TG_DEEP_SEARCH_TRIGGER &&
+      keyword.trim().length > 1 &&
+      chList.length > 0
+    ) {
+      const deepTasks = [...priorityList, ...normalList].map((channel) =>
+        createChannelTask(channel, SearchService.TG_DEEP_CHANNEL_LIMIT)
+      );
+      const deepResults = flattenResults(
+        await this.runWithConcurrency(deepTasks, concurrency)
+      );
+      results = this.mergeUniqueResults(results, deepResults);
     }
 
     if (cacheEnabled && results.length > 0) {
@@ -252,7 +282,7 @@ export class SearchService {
     errorCollector: ErrorCollector
   ): Promise<SearchResult[]> {
     const cacheKey = `plugin:${keyword}:${(plugins ?? [])
-      .map((p) => p?.toLowerCase())
+      .map((plugin) => plugin?.toLowerCase())
       .filter(Boolean)
       .sort()
       .join(",")}`;
@@ -266,15 +296,15 @@ export class SearchService {
     }
 
     const allPlugins = this.pluginManager.getPlugins();
-    const healthyPlugins = allPlugins.filter((p) =>
-      this.healthChecker.isHealthy(p.name())
+    const healthyPlugins = allPlugins.filter((plugin) =>
+      this.healthChecker.isHealthy(plugin.name())
     );
 
     let available: AsyncSearchPlugin[] = [];
-    if (plugins && plugins.length > 0 && plugins.some((p) => !!p)) {
-      const wanted = new Set(plugins.map((p) => p.toLowerCase()));
-      available = healthyPlugins.filter((p) =>
-        wanted.has(p.name().toLowerCase())
+    if (plugins && plugins.length > 0 && plugins.some((plugin) => !!plugin)) {
+      const wanted = new Set(plugins.map((plugin) => plugin.toLowerCase()));
+      available = healthyPlugins.filter((plugin) =>
+        wanted.has(plugin.name().toLowerCase())
       );
     } else {
       available = healthyPlugins;
@@ -288,38 +318,39 @@ export class SearchService {
         : this.options.pluginTimeoutMs || 0
     );
 
-    const pluginPromises = available.map((p) => async () => {
-      p.setMainCacheKey(cacheKey);
-      p.setCurrentKeyword(keyword);
+    const pluginPromises = available.map((plugin) => async () => {
+      plugin.setMainCacheKey(cacheKey);
+      plugin.setCurrentKeyword(keyword);
 
       const startTime = Date.now();
-      const pluginName = p.name();
+      const pluginName = plugin.name();
+      const queries =
+        (keyword || "").trim().length <= 1
+          ? [keyword, "电影", "movie", "1080p"]
+          : buildSearchKeywordVariants(keyword).slice(0, 3);
 
-      let results = await this.withTimeout<SearchResult[]>(
-        p.search(keyword, ext),
-        timeoutMs,
-        []
-      );
+      let results: SearchResult[] = [];
+      for (const [index, query] of queries.entries()) {
+        const currentResults = await this.withTimeout<SearchResult[]>(
+          plugin.search(query, ext),
+          timeoutMs,
+          []
+        );
 
-      if ((!results || results.length === 0) && (keyword || "").trim().length <= 1) {
-        const fallbacks = ["电影", "movie", "1080p"];
-        for (const fb of fallbacks) {
-          const fallbackResults = await this.withTimeout<SearchResult[]>(
-            p.search(fb, ext),
-            timeoutMs,
-            []
-          );
-          if (fallbackResults && fallbackResults.length > 0) {
-            results = fallbackResults;
-            break;
-          }
+        results = this.mergeUniqueResults(results, currentResults || []);
+
+        if (
+          results.length >= SearchService.PLUGIN_VARIANT_TRIGGER ||
+          index === queries.length - 1
+        ) {
+          break;
         }
       }
 
       const responseTime = Date.now() - startTime;
       this.healthChecker.recordSuccess(pluginName, responseTime);
 
-      return results || [];
+      return results;
     });
 
     const resultsByPlugin = await this.runWithConcurrency(
@@ -369,16 +400,29 @@ export class SearchService {
     a: SearchResult[],
     b: SearchResult[]
   ): SearchResult[] {
+    return this.mergeUniqueResults(a, b);
+  }
+
+  private mergeUniqueResults(
+    a: SearchResult[],
+    b: SearchResult[]
+  ): SearchResult[] {
     const seen = new Set<string>();
     const out: SearchResult[] = [];
-    const pushUnique = (r: SearchResult) => {
-      const key = r.unique_id || r.message_id || `${r.title}|${r.channel}`;
+    const pushUnique = (result: SearchResult) => {
+      const firstLink = Array.isArray(result.links) ? result.links[0]?.url : "";
+      const key =
+        result.unique_id ||
+        result.message_id ||
+        firstLink ||
+        `${result.title}|${result.channel}|${result.datetime || ""}`;
       if (seen.has(key)) return;
       seen.add(key);
-      out.push(r);
+      out.push(result);
     };
-    for (const r of a) pushUnique(r);
-    for (const r of b) pushUnique(r);
+
+    for (const result of a) pushUnique(result);
+    for (const result of b) pushUnique(result);
     return out;
   }
 
@@ -407,20 +451,20 @@ export class SearchService {
   ): MergedLinks {
     const allow =
       cloudTypes && cloudTypes.length > 0
-        ? new Set(cloudTypes.map((s) => s.toLowerCase()))
+        ? new Set(cloudTypes.map((value) => value.toLowerCase()))
         : undefined;
     const out: MergedLinks = {};
-    for (const r of results) {
-      for (const link of r.links || []) {
-        const t = (link.type || "").toLowerCase();
-        if (allow && !allow.has(t)) continue;
-        if (!out[t]) out[t] = [];
-        out[t].push({
+    for (const result of results) {
+      for (const link of result.links || []) {
+        const type = (link.type || "").toLowerCase();
+        if (allow && !allow.has(type)) continue;
+        if (!out[type]) out[type] = [];
+        out[type].push({
           url: link.url,
           password: link.password,
-          note: r.title,
-          datetime: r.datetime,
-          images: r.images,
+          note: result.title,
+          datetime: result.datetime,
+          images: result.images,
         });
       }
     }
