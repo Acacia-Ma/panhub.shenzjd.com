@@ -20,7 +20,25 @@
       "Bash(pnpm install *)",
       "Bash(pnpm build *)",
       "Bash(git status *)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Bash(curl -sL -o aliyun.png \"https://www.alipan.com/favicon.ico\" -o quark.png \"https://pan.quark.cn/favicon.ico\" -o baidu.png \"https://pan.baidu.com/favicon.ico\" -o 115.png \"https://115.com/favicon.ico\" -o xunlei.png \"https://pan.xunlei.com/favicon.ico\" -o uc.png \"https://drive.uc.cn/favicon.ico\" -o tianyi.png \"https://cloud.189.cn/favicon.ico\" -o 123.png \"https://www.123pan.com/favicon.ico\" -o mobile.png \"https://yun.139.com/favicon.ico\")",
+      "Bash(file *)",
+      "Bash(curl -sL -A \"Mozilla/5.0\" -o aliyun.png \"https://www.alipan.com/favicon.ico\")",
+      "Bash(curl -sL -A \"Mozilla/5.0\" -o baidu.png \"https://pan.baidu.com/favicon.ico\")",
+      "Bash(curl -sL -A \"Mozilla/5.0\" -o mobile.png \"https://yun.139.com/favicon.ico\")",
+      "Bash(curl -sL -A \"Mozilla/5.0\" -o 123.png \"https://www.123pan.com/favicon.ico\")",
+      "Bash(curl -sL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36' -H 'Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' -o baidu.png https://pan.baidu.com/favicon.ico)",
+      "Bash(curl -sL -o baidu.png \"https://nd-static.cdn.bcebos.com/nd-static/css/common/images/favicon/favicon.ico\" -A \"Mozilla/5.0\")",
+      "Bash(curl -sL -o 123.png \"https://img.cdn.123pan.cn/resource/123pan/static/img/logo.123pan.png\" -A \"Mozilla/5.0\")",
+      "Bash(curl -sL -o tianyi.png \"https://cloud.189.cn/web/login/favicon.ico\" -A \"Mozilla/5.0\")",
+      "Bash(curl -sL -o mobile.png \"https://yun.139.com/favicon.ico\" -A \"Mozilla/5.0\" -H \"Referer: https://yun.139.com/\")",
+      "Bash(curl -sL -o baidu.png \"https://nd-static.bdstatic.com/m-static/wp-brand/favicon.ico\")",
+      "Bash(sips -s format png baidu.png --out baidu.png)",
+      "Bash(curl -sL -o 123.png \"https://statics.123pan.com/static/pwa-icon-192.png\")",
+      "Bash(curl -sL -o tianyi.png \"https://cloud.dlife.cn/web/main/logo.ico\")",
+      "Bash(curl -sL -o mobile.png \"https://yun.139.com/w/static/img/LOGO.png\")",
+      "Bash(curl -sL -o xunlei.png \"https://pan.xunlei.com/icon.png\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
