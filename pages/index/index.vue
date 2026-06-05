@@ -23,7 +23,9 @@
         <div class="hero-shape" aria-hidden="true" />
       </header>
       <aside class="hero-aside">
-        <HotSearchSection ref="hotSearchRef" :on-search="quickSearch" />
+        <ErrorBoundary message="热搜加载失败">
+          <HotSearchSection ref="hotSearchRef" :on-search="quickSearch" />
+        </ErrorBoundary>
       </aside>
     </div>
 
@@ -125,7 +127,9 @@
 
     <!-- 豆瓣电影新片榜 - 搜索时隐藏 -->
     <section v-if="!searched" class="douban-hot-section">
-      <DoubanHotSection ref="doubanHotRef" :on-search="quickSearch" />
+      <ErrorBoundary message="豆瓣热榜加载失败">
+        <DoubanHotSection ref="doubanHotRef" :on-search="quickSearch" />
+      </ErrorBoundary>
     </section>
   </div>
 </template>
