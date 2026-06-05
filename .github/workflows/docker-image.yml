@@ -72,7 +72,7 @@ jobs:
               --name "$CONTAINER" \
               --restart unless-stopped \
               $ENV_FLAGS \
-              -p 6669:4000 \
+              -p 5253:4000 \
               "$IMAGE"
 
             echo "=== 清理旧镜像 ==="
