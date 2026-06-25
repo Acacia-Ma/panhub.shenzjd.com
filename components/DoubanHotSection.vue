@@ -134,6 +134,9 @@ const currentPage = ref(1);
 const loadObserver = ref<IntersectionObserver | null>(null);
 const loadTriggerRef = ref<HTMLElement | null>(null);
 
+// 防止快速切换分类时旧响应覆盖新数据
+let fetchSeq = 0;
+
 // 所有可用的分类配置
 const availableCategories = computed(() => {
   return [
@@ -165,6 +168,7 @@ function proxyCover(url: string): string {
 }
 
 async function fetchCategoryData(categoryId: string, page: number, append = false) {
+  const mySeq = ++fetchSeq;
   if (page === 1) {
     loading.value = true;
   } else {
@@ -174,6 +178,9 @@ async function fetchCategoryData(categoryId: string, page: number, append = fals
   try {
     const response = await fetch(`/api/douban-hot?category=${categoryId}&page=${page}&limit=25`);
     const data = await response.json();
+
+    // 如果在请求期间用户切换了分类，丢弃过期响应
+    if (mySeq !== fetchSeq) return;
 
     if (data.code === 0 && data.data) {
       const newItems = data.data.items || [];
